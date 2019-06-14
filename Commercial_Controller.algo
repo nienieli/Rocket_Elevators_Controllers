@@ -11,6 +11,7 @@
 'Call_button_light: The light in the call_button'
 'Elevator_button: The buttons you pressed in the elevator'
 'Elevator_button_light: The light in the elevator-button'
+'Emergency_switch: A switch in the elevator that triggers the emergency system'
 'Panel_button: the button of all floors at the ground floor level'
 'Close_the_door button: The button that makes the door close sooner'
 'Open_the_door_button: The button that makes the door stay open '
@@ -105,25 +106,36 @@ ENDSEQUENCE
  ' --------------------FIND ELEVATOR--------------------------------------------------------------------------
 
 SEQUENCE find_elevator USING  direction AND floor
-    best_case = NULL
+    best_case IS NULL
     FOR EACH elevator IN column elevators
         IF elevator direction IS direction 
             SET gap between elevator floor and floor_number      
-            IF elevator_direction IS EQUAL TO move_up AND the floor_number is GREATER THAN elevator_floor THEN
+            IF elevator_direction IS move_up AND the floor_number is GREATER THAN elevator_floor THEN
                 IF [gap, elevator, direction] IS BETTER THAN best_case 
                     best_case = [gap, elevator, direction]
-            ELSE IF elevator_direction IS EQUAL TO move_down AND the floor_number is LESS THAN elevator_floor THEN
+            ELSE IF elevator_direction IS move_down AND the floor_number is LESS THAN elevator_floor THEN
                 IF [gap, elevator, direction] IS BETTER THAN best_case
                     best_case = [gap, elevator, direction]
             END IF
-        ELSE IF elevator_status IS idle  THEN
-            SET gap between elevator floor and floor_number
-            IF [gap, elevator, idle] IS BETTER THAN best_case
-                best_case = [gap, elevator, direction]
+        ELSE IF elevator_status IS idle  THEN IF 
+            IF [gap, elevator, direction] IS BETTER THAN best_case
+                    best_case = [gap, elevator, direction]
+            END IF
         END IF    
     ENDFOR
     REPEAT find_elevator UNTIL best_case IS NOT EMPTY
     return elevator from best_case
+ENDSEQUENCE
+
+SEQUENCE  check_best_case USING find_elevator AND gap AND direction AND floor
+CALL best_case  WITH  gap AND direction AND floor
+  SET gap between elevator_floor and floor_number
+        IF [gap, elevator, idle] IS BETTER THAN best_case                 
+            best_case = [gap, elevator, direction]
+            IF elevator_direction IS floor_number TAKE elevator FOR best_case
+            ELSE BETWEEN floor_number AND elevator_floor the elevator have the smallest gap TAKE elevator FOR best_case
+            END IF
+        END IF
 ENDSEQUENCE
 
  '-------------------------FLOOR DOOR---------------------------------------- '
@@ -315,6 +327,15 @@ SEQUENCE elevator_status USING elevator
         SET elevator_status TO idle
 ENDSEQUENCE
 
+'----------------------------------EMERGENCY--------------------------------------------------'
+SEQUENCE emergency USING elevator AND floor AND direction
+    IF emergency_switch IS on
+        stop elevators TO the NEXT floor AND SET elevator_status TO stop until further notice
+    ELSE 
+        DO NOTHING
+    END IF
+ENDSEQUENCE
+
 '-----------------------------EXTERNAL SEQUENCE-----------------------------------------------'
 
 SEQUENCE external_sequence  USING elevator AND direction AND floor
@@ -323,6 +344,7 @@ SEQUENCE external_sequence  USING elevator AND direction AND floor
         CALL call_button_direction WITH direction AND floor
         CALL call_button_light WITH direction AND floor
         elevator = CALL find_elevator WITH direction AND floor
+        CALL check_best_case WITH gap AND direction AND floor
         CALL call_elevator WITH elevator AND direction AND floor
         CALL floor_door WITH elevator
 ENDSEQUENCE WITH elevator AND direction AND floor
@@ -373,24 +395,6 @@ SEQUENCE call_elevator USING floor AND direction
         elevator_queue can ONLY contain 1 floor_number at the time 
 ENDSEQUENCE
 
-'------------------------------FINDING ELEVATOR---------------------------------------------'
-
-SEQUENCE find_elevator USING  direction AND floor
-    FOR EACH elevator IN column elevators
-        IF elevator_direction IS EQUAL TO direction
-            SET gap BETWEEN elevator AND floor_number
-            CALL elevator WITH  LESS gap
-                IF elevator_direction IS EQUAL TO move_down AND the floor_number is MORE THAN elevator_floor THEN
-                    CONTINUE TO move_down
-                    ELSE CALL call_elevator
-                END IF
-            ELSE IF elevator_status IS idle  THEN
-                CALL call_elevator WITH floor AND direction
-            ELSE  REPEAT find_elevator UNTIL you can call_elevator
-        END IF
-    ENDFOR
-ENDSEQUENCE
-
 ' ------------RETURN ELEVATOR TO ORIGIN POINTS--------------------------------------------------------------
 
 SEQUENCE return_origin USING elevator AND floor AND direction
@@ -400,13 +404,13 @@ SEQUENCE return_origin USING elevator AND floor AND direction
     between 4am TO 10am
 
     FOR column_1
-        SET origin TO 6 
-            IF elevator_floor IS LESS THAN 6 THEN 
+        SET origin TO 7 
+            IF elevator_floor IS LESS THAN 7 THEN 
                 CALL move_up 
                 SET elevator_status TO moving
                 UNTIL elevator_floor IS EQUAL TO origin THEN
                 SET elevator_status TO idle
-            ELSE elevator_floor IS MORE THAN 6 THEN 
+            ELSE elevator_floor IS MORE THAN 7 THEN 
                 CALL move_down 
                 SET elevator_status TO moving
                 UNTIL elevator_floor IS EQUAL TO origin THEN

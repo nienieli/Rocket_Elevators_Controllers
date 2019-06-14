@@ -11,6 +11,7 @@
 'Call_button_light: The light in the call_button'
 'Elevator_button: The buttons you pressed in the elevator'
 'Elevator_button_light: The light in the elevator-button'
+'Emergency_switch: A switch in the elevator that triggers the emergency system'
 'Close_the_door button: The button that makes the door close sooner'
 'Open_the_door_button: The button that makes the door stay open '
 'Direction: Where the elevator is going (up or down)'
@@ -36,7 +37,7 @@ END SEQUENCE
 '---------------------------FLOOR DISPLAY------------------------------------------'
 
 SEQUENCE floor_display USING elevator AND direction
-    floor_display IS EQUAL TO elevator_floor AND elevator_direction
+    floor_display IS elevator_floor AND elevator_direction
 ENDSEQUENCE
 
 '-------------------------CALL BUTTON LIGHT---------------------------------------- '
@@ -51,10 +52,10 @@ END SEQUENCE
 
 SEQUENCE call_button_direction USING direction AND floor_number
     WHEN call_button is pressed SET direction TO move_up or move_down
-    IF call_button_direction IS EQUAL TO move_up THEN 
-        CALL elevator WITH elevator_direction IS EQUAL TO call_button_direction
+    IF call_button_direction IS move_up THEN 
+        CALL elevator WITH elevator_direction IS call_button_direction
     ELSE call_button_direction IS move_down THEN 
-        CALL elevator WITH elevator_direction IS EQUAL TO call_button_direction
+        CALL elevator WITH elevator_direction IS call_button_direction
     ENDIF
     SET floor_number
 ENDSEQUENCE
@@ -76,17 +77,17 @@ SEQUENCE find_elevator USING  direction AND floor
     FOR EACH elevator IN column elevators
         IF elevator direction IS direction 
             SET gap between elevator floor and floor_number      
-            IF elevator_direction IS EQUAL TO move_up AND the floor_number is GREATER THAN elevator_floor THEN
+            IF elevator_direction IS move_up AND the floor_number is GREATER THAN elevator_floor THEN
                 IF [gap, elevator, direction] IS BETTER THAN best_case 
                     best_case = [gap, elevator, direction]
-            ELSE IF elevator_direction IS EQUAL TO move_down AND the floor_number is LESS THAN elevator_floor THEN
+            ELSE IF elevator_direction IS move_down AND the floor_number is LESS THAN elevator_floor THEN
                 IF [gap, elevator, direction] IS BETTER THAN best_case
                     best_case = [gap, elevator, direction]
             END IF
-        ELSE IF elevator_status IS idle  THEN
-            SET gap between elevator floor and floor_number
-            IF [gap, elevator, idle] IS BETTER THAN best_case                   faire une sequence pour check best_elevator prendre ligne87-89 check conditon avec gap direction  which elevator (1,2)
-                best_case = [gap, elevator, direction]
+        ELSE IF elevator_status IS idle  THEN IF 
+            IF [gap, elevator, direction] IS BETTER THAN best_case
+                    best_case = [gap, elevator, direction]
+            END IF
         END IF    
     ENDFOR
     REPEAT find_elevator UNTIL best_case IS NOT EMPTY
@@ -94,7 +95,14 @@ SEQUENCE find_elevator USING  direction AND floor
 ENDSEQUENCE
 
 SEQUENCE  check_best_case USING find_elevator AND gap AND direction AND floor
-
+CALL best_case  WITH  gap AND direction AND floor
+  SET gap between elevator_floor and floor_number
+        IF [gap, elevator, idle] IS BETTER THAN best_case                 
+            best_case = [gap, elevator, direction]
+            IF elevator_direction IS floor_number TAKE elevator FOR best_case
+            ELSE BETWEEN floor_number AND elevator_floor the elevator have the smallest gap TAKE elevator FOR best_case
+            END IF
+        END IF
 ENDSEQUENCE
 
  '-------------------------FLOOR DOOR---------------------------------------- '
@@ -128,18 +136,18 @@ SEQUENCE open_elevator_door USING elevator
   SET elevator_door is open
     IF elevator_door is open THEN
     SET timer TO 5 seconds THEN
-         CALL close_elevator_door    
+         CALL close_elevator_door   
     ELSE stay open
     END IF
 END SEQUENCE
 
 SEQUENCE close_elevator_door USING elevator
-  CALL over_weight 
+  CALL over_weight WITH elevator
   SET elevator_door IS close
     IF elevator_door IS not obstruct OR over_weight THEN
         close elevator_door 
     ELSE IF elevator_door IS obstruct OR over_weight THEN
-        CALL open_elevator_door
+        CALL open_elevator_door WITH elevator
     END IF
 END SEQUENCE
 
@@ -149,7 +157,7 @@ SEQUENCE move_up USING elevator
     TAKE first element of elevator_queue as requested_floor
     SET elevator_status TO moving
     IF elevator_floor is LESS THAN requested_floor THEN elevator_floor  INCREMENT BY 1
-        REPEAT elevator_floor INCREMENT BY 1 UNTIL elevator_floor IS EQUAL TO requested_floor
+        REPEAT elevator_floor INCREMENT BY 1 UNTIL elevator_floor IS requested_floor
         ELSE stop at this floor
         SET elevator_status TO stop
     END IF
@@ -160,7 +168,7 @@ SEQUENCE move_down USING elevator
     TAKE first element of elevator_queue as requested_floor
     SET elevator_status TO moving
     IF elevator_floor IS MORE THAN requested_floor THEN elevator_floor DECREMENT BY 1
-        REPEAT elevator_floor DECREMENT BY 1 UNTIL elevator_floor IS EQUAL TO requested_floor
+        REPEAT elevator_floor DECREMENT BY 1 UNTIL elevator_floor IS requested_floor
         ELSE stop at this floor
         SET elevator_status TO stop
     END IF
@@ -188,7 +196,7 @@ SEQUENCE over_weight USING elevator
         READ weight_sensor THEN
         IF weight_sensor value IS MORE THAN 3500 lbs THEN
             SET heavy_display_light TO ON THEN
-            CALL open_doors
+            CALL open_doors WITH elevator
             ELSE IF weight_sensor value is LESS THAN 3500 lbs
             SET heavy_display_light TO OFF
         END IF
@@ -202,12 +210,12 @@ between 3 am to 10 am
 
   SET origin TO 6
     IF elevator_floor IS LESS THAN 6 THEN 
-        CALL move_up 
+        CALL move_up WITH elevator
         SET elevator_status TO moving
         UNTIL elevator_floor = origin THEN
         SET elevator_status TO idle
     ELSE elevator_floor IS MORE THAN 6 THEN 
-        CALL move_down 
+        CALL move_down WITH elevator
         SET elevator_status TO moving
         UNTIL elevator_floor = origin THEN
         SET elevator_status TO idle
@@ -216,7 +224,7 @@ between 3 am to 10 am
 between 10 am to 3 am
 
     SET origin TO 0
-    CALL Move_Down UNTIL elevator_floor IS EQUAL TO origin THEN
+    CALL Move_Down UNTIL elevator_floor IS origin WITH elevator THEN
     SET elevator_status TO idle
 END SEQUENCE
 
@@ -231,6 +239,15 @@ SEQUENCE elevator_status USING elevator
         SET elevator_status TO idle
 ENDSEQUENCE
 
+'----------------------------------EMERGENCY--------------------------------------------------'
+SEQUENCE emergency USING elevator AND floor AND direction
+    IF emergency_switch IS on
+        stop elevators TO the NEXT floor AND SET elevator_status TO stop until further notice
+    ELSE 
+        DO NOTHING
+    END IF
+ENDSEQUENCE
+
 '-----------------------------EXTERNAL SEQUENCE-----------------------------------------------'
 
 SEQUENCE external_sequence USING elevator AND direction AND floor
@@ -239,6 +256,7 @@ SEQUENCE external_sequence USING elevator AND direction AND floor
         CALL call_button_direction WITH direction AND floor
         CALL call_button_light WITH direction AND floor
         CALL find_elevator WITH direction AND floor AND RETURN elevator
+        CALL check_best_case WITH gap  AND direction AND elevator
         CALL call_elevator WITH elevator AND direction AND floor
         CALL floor_door WITH elevator
 ENDSEQUENCE
