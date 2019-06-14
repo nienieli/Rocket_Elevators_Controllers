@@ -242,7 +242,8 @@ ENDSEQUENCE
 '----------------------------------EMERGENCY--------------------------------------------------'
 SEQUENCE emergency USING elevator AND floor AND direction
     IF emergency_switch IS on
-        stop elevators TO the NEXT floor AND SET elevator_status TO stop until further notice
+        stop elevators TO the NEXT floor EVEN if this floor is not in the elevator_queue AND 
+        SET elevator_status TO stop until further notice
     ELSE 
         DO NOTHING
     END IF

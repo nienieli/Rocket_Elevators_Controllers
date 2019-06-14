@@ -20,7 +20,6 @@
 'Origin: The beginning point of the elevators'
 'column_section: contains the floors where an elevator is designed to go EX: floors 26 to 46'
 
-
 '------------------------------CORPORATE BUILDING: CLASSIC----------------------------------------------------------------------------------- '
 
 
@@ -330,11 +329,13 @@ ENDSEQUENCE
 '----------------------------------EMERGENCY--------------------------------------------------'
 SEQUENCE emergency USING elevator AND floor AND direction
     IF emergency_switch IS on
-        stop elevators TO the NEXT floor AND SET elevator_status TO stop until further notice
+        stop elevators TO the NEXT floor EVEN if this floor is not in the elevator_queue AND 
+        SET elevator_status TO stop until further notice
     ELSE 
         DO NOTHING
     END IF
 ENDSEQUENCE
+
 
 '-----------------------------EXTERNAL SEQUENCE-----------------------------------------------'
 
