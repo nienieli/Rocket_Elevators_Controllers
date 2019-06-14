@@ -1,0 +1,262 @@
+'---------------------------DEFINITION-------------------------------------------------'
+
+'Battery: Set of elevators systems in a building'
+'Column: Area where the elevators are. A column can contain more then 1 elevator'
+'Elevators: Contains all the elevators in a column'
+'Elevator:a platform or compartment housed in a shaft for raising and lowering people or things to different floors or levels'
+'Elevator_door: The door of the elevator'
+'Elevator_status: what the elevator is doing (moving, stop, idle)'
+'Floor_door: The door between the the elevator and the floor you are on'
+'Call_button: The button you push to call an elevator'
+'Call_button_light: The light in the call_button'
+'Elevator_button: The buttons you pressed in the elevator'
+'Elevator_button_light: The light in the elevator-button'
+'Close_the_door button: The button that makes the door close sooner'
+'Open_the_door_button: The button that makes the door stay open '
+'Direction: Where the elevator is going (up or down)'
+'Move: Is the elevator in moving or idling'
+'Origin: The beginning point of the elevators'
+
+' ------------------------MAIN TO ACTIVE SYSTEM-----------------------------------------
+
+SEQUENCE main 
+  CALL init_elevator_system WITH floor_number
+END SEQUENCE
+
+' --------------------------STAGE INIT SYSTEM ------------------------------------------
+
+SEQUENCE init_elevator_system (floor_number) USING battery AND elevator AND floor
+  SET battery STATUS TO operational
+     SET elevator_status TO idle
+     SET elevator_position TO 6
+     SET elevator_door TO close
+   INIT Call_buttons USING floor_number  
+END SEQUENCE
+
+'---------------------------FLOOR DISPLAY------------------------------------------'
+
+SEQUENCE floor_display USING elevator AND direction
+    floor_display IS EQUAL TO elevator_floor AND elevator_direction
+ENDSEQUENCE
+
+'-------------------------CALL BUTTON LIGHT---------------------------------------- '
+
+SEQUENCE call_button_light USING call_button 
+    IF call_button is pressed THEN call_button_light is on
+        ELSE call_button_light is off 
+    END IF
+END SEQUENCE
+
+'-------------------------CALL BUTTON DIRECTION---------------------------------------- '
+
+SEQUENCE call_button_direction USING direction AND floor_number
+    WHEN call_button is pressed SET direction TO move_up or move_down
+    IF call_button_direction IS EQUAL TO move_up THEN 
+        CALL elevator WITH elevator_direction IS EQUAL TO call_button_direction
+    ELSE call_button_direction IS move_down THEN 
+        CALL elevator WITH elevator_direction IS EQUAL TO call_button_direction
+    ENDIF
+    SET floor_number
+ENDSEQUENCE
+
+    ' --------------------CALL ELEVATOR--------------------------------------------------------------------------
+
+SEQUENCE call_elevator USING elevator AND floor AND direction
+    ADD floor_number TO elevator_queue
+    SORT elevator_queue
+        IF direction IS move_up THEN SORT ascending
+        ELSE SORT descending
+        ENDIF
+ENDSEQUENCE
+
+ ' --------------------FIND ELEVATOR--------------------------------------------------------------------------
+
+SEQUENCE find_elevator USING  direction AND floor
+    best_case IS NULL
+    FOR EACH elevator IN column elevators
+        IF elevator direction IS direction 
+            SET gap between elevator floor and floor_number      
+            IF elevator_direction IS EQUAL TO move_up AND the floor_number is GREATER THAN elevator_floor THEN
+                IF [gap, elevator, direction] IS BETTER THAN best_case 
+                    best_case = [gap, elevator, direction]
+            ELSE IF elevator_direction IS EQUAL TO move_down AND the floor_number is LESS THAN elevator_floor THEN
+                IF [gap, elevator, direction] IS BETTER THAN best_case
+                    best_case = [gap, elevator, direction]
+            END IF
+        ELSE IF elevator_status IS idle  THEN
+            SET gap between elevator floor and floor_number
+            IF [gap, elevator, idle] IS BETTER THAN best_case                   faire une sequence pour check best_elevator prendre ligne87-89 check conditon avec gap direction  which elevator (1,2)
+                best_case = [gap, elevator, direction]
+        END IF    
+    ENDFOR
+    REPEAT find_elevator UNTIL best_case IS NOT EMPTY
+    return elevator from best_case
+ENDSEQUENCE
+
+SEQUENCE  check_best_case USING find_elevator AND gap AND direction AND floor
+
+ENDSEQUENCE
+
+ '-------------------------FLOOR DOOR---------------------------------------- '
+
+SEQUENCE floor_door USING elevator AND floor
+    IF elevator_floor IS EQUAL floor_door THEN floor_door is open 
+        ELSE floor_door is close
+    END IF
+END SEQUENCE
+
+
+'-------------------------REQUESTED FLOOR---------------------------------------- '
+
+SEQUENCE requested_floor USING elevator_button
+    IF elevator_button is pressed  THEN elevator_button IS requested_floor
+        ELSE there is no requested floor
+    END IF
+END SEQUENCE
+
+'-------------------------LIGHT OF THE ELEVATOR---------------------------------------- '
+
+SEQUENCE elevator_button_light
+    IF elevator_button_light is pressed THEN elevator_button_light IS on
+        ELSE elevator_button_light IS off 
+    END IF
+END SEQUENCE
+
+'-------------------------ELEVATOR DOOR (OPEN/CLOSE)---------------------------------------- '
+
+SEQUENCE open_elevator_door USING elevator
+  SET elevator_door is open
+    IF elevator_door is open THEN
+    SET timer TO 5 seconds THEN
+         CALL close_elevator_door    
+    ELSE stay open
+    END IF
+END SEQUENCE
+
+SEQUENCE close_elevator_door USING elevator
+  CALL over_weight 
+  SET elevator_door IS close
+    IF elevator_door IS not obstruct OR over_weight THEN
+        close elevator_door 
+    ELSE IF elevator_door IS obstruct OR over_weight THEN
+        CALL open_elevator_door
+    END IF
+END SEQUENCE
+
+'-------------------------ELEVATOR DIRECTION (UP/DOWN)---------------------------------------- '
+
+SEQUENCE move_up USING elevator 
+    TAKE first element of elevator_queue as requested_floor
+    SET elevator_status TO moving
+    IF elevator_floor is LESS THAN requested_floor THEN elevator_floor  INCREMENT BY 1
+        REPEAT elevator_floor INCREMENT BY 1 UNTIL elevator_floor IS EQUAL TO requested_floor
+        ELSE stop at this floor
+        SET elevator_status TO stop
+    END IF
+    REMOVE floor_number FROM elevator_queue
+END SEQUENCE
+
+SEQUENCE move_down USING elevator 
+    TAKE first element of elevator_queue as requested_floor
+    SET elevator_status TO moving
+    IF elevator_floor IS MORE THAN requested_floor THEN elevator_floor DECREMENT BY 1
+        REPEAT elevator_floor DECREMENT BY 1 UNTIL elevator_floor IS EQUAL TO requested_floor
+        ELSE stop at this floor
+        SET elevator_status TO stop
+    END IF
+END SEQUENCE
+
+'-------------------------THE OPEN/CLOSE DOOR BUTTON---------------------------------------- '
+
+SEQUENCE open_the_door_button USING elevator_door
+    IF open_the_door_button is pressed THEN elevator_door IS open
+        ELSE elevator_door IS closing
+    END IF
+END SEQUENCE
+
+SEQUENCE close_the_door_button USING elevator_door
+    IF close_the_door_button is pressed THEN elevator_door IS close
+        ELSE elevator_door IS open
+    END IF
+END SEQUENCE
+
+'-------------------------------OVER WEIGHT----------------------------------------------------'
+
+SEQUENCE over_weight USING elevator
+    FOR EACH elevator in column
+        SET maximum_weight TO 3500 lbs THEN
+        READ weight_sensor THEN
+        IF weight_sensor value IS MORE THAN 3500 lbs THEN
+            SET heavy_display_light TO ON THEN
+            CALL open_doors
+            ELSE IF weight_sensor value is LESS THAN 3500 lbs
+            SET heavy_display_light TO OFF
+        END IF
+    END FOR
+ENDSEQUENCE
+
+' ------------RETURN ELEVATOR TO ORIGIN POINTS---------------------------------------------'
+
+SEQUENCE return_origin USING elevator AND floor
+between 3 am to 10 am 
+
+  SET origin TO 6
+    IF elevator_floor IS LESS THAN 6 THEN 
+        CALL move_up 
+        SET elevator_status TO moving
+        UNTIL elevator_floor = origin THEN
+        SET elevator_status TO idle
+    ELSE elevator_floor IS MORE THAN 6 THEN 
+        CALL move_down 
+        SET elevator_status TO moving
+        UNTIL elevator_floor = origin THEN
+        SET elevator_status TO idle
+    ENDIF
+
+between 10 am to 3 am
+
+    SET origin TO 0
+    CALL Move_Down UNTIL elevator_floor IS EQUAL TO origin THEN
+    SET elevator_status TO idle
+END SEQUENCE
+
+'------------------------------ELEVATOR STATUS-----------------------------------------------'
+
+SEQUENCE elevator_status USING elevator
+    IF elevator is moving 
+        SET elevator_status TO moving
+    ELSE IF elevator is stop
+        SET elevator_status TO stop
+    ELSE 
+        SET elevator_status TO idle
+ENDSEQUENCE
+
+'-----------------------------EXTERNAL SEQUENCE-----------------------------------------------'
+
+SEQUENCE external_sequence USING elevator AND direction AND floor
+    WHEN call_button IS PRESSED
+        CALL floor_display WITH direction AND floor
+        CALL call_button_direction WITH direction AND floor
+        CALL call_button_light WITH direction AND floor
+        CALL find_elevator WITH direction AND floor AND RETURN elevator
+        CALL call_elevator WITH elevator AND direction AND floor
+        CALL floor_door WITH elevator
+ENDSEQUENCE
+
+
+'-----------------------------INTERNAL SEQUENCE-----------------------------------------------'
+
+SEQUENCE internal_sequence USING elevator AND direction
+    WHEN call_elevator IS DONE AND elevator IS arrived
+        CALL over_weight WITH elevator 
+            IF close_elevator_door_button is press THEN CALL close_elevator_door
+            ElSE IF open_elevator_door_button THEN CALL  open_elevator_door_button
+            ELSE DO NOTHING
+            END IF
+        CALL close_elevator_door  WITH elevator AND floor
+        CALL elevator_queue WITH elevator AND direction AND floor
+        CALL requested_floor WITH elevator AND direction AND floor
+        CALL appropriate elevator move (up or down) WITH elevator AND direction AND floor
+        CHECK elevator_queue 
+        CALL open_elevator_door WITH elevator AND direction AND floor
+ENDSEQUENCE
