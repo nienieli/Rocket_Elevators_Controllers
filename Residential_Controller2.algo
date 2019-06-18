@@ -1,0 +1,255 @@
+// Credits: Dominic Villemure //
+// You need to set the numbers of floor, the numbers of column and the number of elevator per column. //
+SEQUENCE init
+    SET NumbersOfFloor = 10
+    SET Battery{
+        Status = On
+        NumbersOfColumn = 1
+        SET NumbersOfCallButton = (NumbersOfFloor*2) -2
+    }
+    FOR EACH CallButton IN Battery
+    CallButton = {
+        UserFloors
+        Direction
+        Light = OFF
+    }
+    END FOR
+    FOR EACH Column IN Battery
+    SET Column = {
+        NumbersOfElevator = 2
+        
+        
+    }
+    END FOR
+    FOR EACH Elevator IN Column
+        SET Elevator = {
+        Status = idle
+        State = stop
+        DoorPosition = 0 cm
+        MinDoorPosition = 0 cm
+        MaxDoorPosition = 150 cm
+        DoorStatus = closed
+        PositionNow = 1
+        DoorSensorStatus = NOT triggered
+        RequestList = empty
+        SET NumbersFloorRequestButton = NumbersOfFloor  
+        ScreenDisplay = 1
+        OpenDoorButton 
+        CloseDoorButton
+        OriginPosition1 = 7
+        OriginPosition2 = 1
+        FloorRequestButton ={
+            Light = Off
+            Floor
+        }
+    } 
+    END FOR 
+END SEQUENCE
+SEQUENCE MoveToOrigin1 USING Elevator
+    REPEAT
+        IF Elevator.PositionNow > Elevator.OriginPosition1
+        DECREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow - 1)
+        SET Elevator.State = MoveDown
+        ELSE 
+        INCREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow + 1)
+        SET Elevator.State = MoveUp
+    UNTIL Elevator.PositionNow = Elevator.OriginPosition1
+    SET Elevator.State = Stop
+END SEQUENCE
+SEQUENCE MoveToOrigin2 USING Elevator
+    REPEAT
+        IF Elevator.PositionNow > Elevator.OriginPosition2
+        DECREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow - 1)
+        SET Elevator.State = MoveDown
+        ELSE 
+        INCREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow + 1)
+        SET Elevator.State = MoveUp
+    UNTIL Elevator.PositionNow = Elevator.OriginPosition2
+    SET Elevator.State = Stop
+    
+END SEQUENCE
+
+
+SEQUENCE Move USING Elevator
+    IF First element OF Elevator.RequestList.Floor  > Elevator.PositionNow
+        REPEAT
+            INCREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow + 1)
+            SET Elevator.State = MoveUp
+        UNTIL First element OF Elevator.RequestList.Floor = Elevator.PositionNow
+        SET Elevator.State = stop
+    ELSE IF First element OF ElevatorRequestList.Floor = Elevator.PositionNow 
+        SET Elevator.State = stop  
+    ELSE
+        REPEAT
+            DECREMENT move Elevator 1 m/s TO (Elevator.PositionNow = Elevator.PositionNow - 1)
+            SET Elevator.State = MoveDown
+        UNTIL First element OF Elevator.RequestList.Floor = Elevator.PositionNow
+        SET ElevatorState = stop
+    RETURN ElevatorState
+END SEQUENCE 
+
+
+SEQUENCE Sort RequestList USING Elevator
+    IF Elevator.Status = GoingUp THEN
+        COMPUTE Sort Elevator.RequestList BY ascending order
+    ELSE IF Elevator.Status = GoingDown
+        COMPUTE sort Elevator.RequestList BY descending order
+END SEQUENCE
+
+
+SEQUENCE Elevator Status USING Elevator
+    IF First element OF Elevator.RequestList.Floor OR First element OF Elevator.RequestList.UserFloor > Elevator.PositionNow
+        SET Elevator.Status = GoingUp
+    ELSE IF Elevator.RequestList.Floor OR Elevator.RequestList.UserFloor = Elevator.PositionNow 'A VERIFIER SI FIRST ELEMENT DOIT ETRE PRIS EN COMPTE'
+        SET Elevator.State = stop
+    ELSE
+        SET Elevator.Status = GoingDown
+    END IF
+END SEQUENCE
+
+
+
+SEQUENCE FindElevator USING CallButton AND FloorRequestButton
+    best case = 1
+    SelectedElevator = 1
+   FOR EACH Elevator in Column Elevators
+        COMPUTE closest elevator = absolute position of (ElevatorPositionNow - CallButton UserFloor)
+        IF Elevator is idle THEN
+            COMPUTE new best case = NumbersOfFloor + 1 - closest elevator
+        ELSE IF elevator is going down THEN
+            IF CallButton UserFloor > ElevatorPositionNow 
+                COMPUTE new best case = 1
+            ELSE IF CallButton UserFloor < ElevatorPositionNow AND CallButton.Direction = Elevator.Status
+                COMPUTE new best case = NumbersOfFloor + 2 - closest elevator
+            ELSE IF CallButton UserFloor < ElevatorPositionNow AND CallButton.Direction = Elevator.Status
+                COMPUTE new best case = NumbersOfFloor + 1 - closest elevator
+            END IF
+        ELSE IF elevator is going up THEN
+            IF CallButton UserFloor < ElevatorPositionNow
+                COMPUTE new best case = 1
+            ELSE IF CallButton UserFloor > ElevatorPositionNow AND CallButton.Direction = Elevator.Status
+                COMPUTE new best case = NumbersOfFloor + 2 - closest elevator
+            ELSE IF allButton UserFloor > ElevatorPositionNow AND CallButton.Direction = Elevator.Status 
+                COMPUTE new best case = NumbersOfFloor + 1 - closest elevator
+            END IF
+        END IF
+        IF new best case > best case
+            COMPUTE SelectedElevator = Elevator
+            COMPUTE best case = new best case
+            
+        END IF
+    END FOR
+    RETURN CallButton.Floor TO SelectedElevator.RequestList 
+END SEQUENCE
+--------------------------------------------BUTTONS------------------------------------------------------------
+SEQUENCE CloseDoorButton USING Elevator
+    REPEAT
+        IF Elevator.State = stop AND Elevator.DoorStatus = open OR moving AND Elevator.SensorStatus is not triggered THEN
+            DECREMENT move Elevator.Door 10 cm/s TO (Elevator.DoorPosition = Elevator.DoorPosition - 10cm)
+        ELSE IF Elevator.SensorStatus IS triggered THEN
+            CALL OpenDoorButton WITH Elevator
+        END IF
+    UNTIL Elevator.DoorPosition = MinDoorPosition
+        SET Elevator.DoorStatus = closed
+    
+END SEQUENCE
+   
+SEQUENCE OpenDoorButton USING Elevator 
+    REPEAT
+        IF Elevator.State = stop AND Elevator.DoorStatus = (closed or moving) THEN
+            INCREMENT move Elevator.Door 10 cm/s TO (Elevator.DoorPosition = Elevator.DoorPosition + 10 cm)
+    UNTIL Elevator.DoorPosition = MaxDoorPosition
+            SET Elevator.DoorStatus = open
+            Wait 5 seconds
+            CALL CloseDoorButton WITH Elevator                                           '//159
+        END IF
+END SEQUENCE
+SEQUENCE FindCallButton USING Battery AND CallButton.UserFloor 
+    FOR EACH CallButton IN Battery
+        IF Battery.CallButton.UserFloor = CallButton.UserFloor THEN
+            SET CallButton.Light ON                      
+            CALL FindElevator WITH CallButton                                            '//120
+            RETURN CallButton
+        END IF
+    END FOR  
+END SEQUENCE
+SEQUENCE FindFloorRequestButton USING Battery AND FloorRequestButton.Floor
+        FOR EACH FloorRequestButton IN Battery
+            IF Battery.FloorRequestButton.Floors = FloorRequestButton.Floors THEN
+                SET FloorRequestButton.Light ON                    
+                CALL FindElevator WITH FloorRequestButton                                 '//120
+                RETURN FloorRequestButton
+            END IF
+        END FOR
+END SEQUENCE
+--------------------------------------------END BUTTONS------------------------------------------------------------
+--------------------------------------------CONTROLLER ------------------------------------------------------------
+SEQUENCE controller
+    WHILE Battery is on
+        IF CallButton is pressed
+            CALL FindCallButton WITH Battery
+        ELSE IF FloorRequestButton is pressed
+            CALL FindFloorRequestButton WITH Battery
+        ELSE IF CloseDoorButton is pressed
+            CALL CloseDoorButton WITH Elevator
+        ELSE IF OpenDoorButton is pressed THEN
+            CALL OpenDoorButton WITH Elevator
+        END IF
+        FOR EACH Column in Battery
+            FOR EACH Elevator in Column 
+                COMPUTE ElevatorPositionNow = Mesured position of Elevator (from sensor / wires )
+                SET Elevator.PositionNow = ElevatorPositionNow
+            END FOR
+        END FOR
+        
+        FOR EACH Column in Battery
+            FOR EACH Elevator in Column
+                IF door is open
+                SET DoorStatus = open
+                ELSE IF door is close
+                SET DoorStatus = close
+                ELSE
+                SET DoorStatus = moving
+                END IF
+            END FOR
+        END FOR
+        FOR EACH Column in Battery
+            FOR EACH Elevator in Column
+                IF Door Sensor is triggered
+                SET DoorSensorStatus = triggered
+                ELSE
+                SET DoorSensorStatus = not triggered
+                END IF
+            END FOR
+        END FOR
+        FOR EACH Column in Battery
+            FOR EACH Elevator IN Column
+                SET screen display TO Elevator.PositionNow
+            END FOR
+        FOR EACH Column IN Battery
+            FOR EACH Elevator in Column
+                WHILE Elevator.RequestList = NOT empty 
+                    CALL Sort Elevator RequestList WITH Elevator.RequestList      '//101
+                    CALL Elevator Status WITH elevator                            '//109
+                    CALL Move WITH Elevator                                       '//80
+                    WHEN Elevator.State = stop
+                        CALL OpenDoorButton WITH Elevator                         '//172
+                        SET CallButton.Light = OFF 
+                        SET IpadButton.Light = OFF
+                        Delete first item IN Elevator.RequestList
+                END WHILE
+                SET Elevator.Status = idle
+                IF date.time = morning
+                    IF Elevator.Status = idle AND Elevator.PositionNow IS NOT Elevator.OriginPosition1 THEN
+                        CALL MoveToOrigin1 WITH Elevator                          '//53
+                    END IF
+                ELSE IF date.time = afternoon
+                     IF Elevator.Status = idle AND Elevator.PositionNow IS NOT Elevator.OriginPosition2 THEN
+                        CALL MoveToOrigin2 WITH Elevator                          '//66
+                    END IF
+                END IF
+            END FOR
+        END FOR
+    END WHILE
+SEQUENCE END
+---------------------------------------END CONTROLLER -------------------------------------------------------------
