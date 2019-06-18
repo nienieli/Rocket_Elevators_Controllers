@@ -100,7 +100,7 @@ END SEQUENCE
 SEQUENCE Elevator Status USING Elevator
     IF First element OF Elevator.RequestList.Floor OR First element OF Elevator.RequestList.UserFloor > Elevator.PositionNow
         SET Elevator.Status = GoingUp
-    ELSE IF Elevator.RequestList.Floor OR Elevator.RequestList.UserFloor = Elevator.PositionNow
+    ELSE IF Elevator.RequestList.Floor OR Elevator.RequestList.UserFloor = Elevator.PositionNow 'A VERIFIER SI FIRST ELEMENT DOIT ETRE PRIS EN COMPTE'
         SET Elevator.State = stop
     ELSE
         SET Elevator.Status = GoingDown
